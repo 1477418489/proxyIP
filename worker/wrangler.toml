@@ -1,0 +1,9 @@
+name = "cfproxyip-probe"
+main = "src/index.js"
+compatibility_date = "2026-11-01"
+compatibility_flags = ["nodejs_compat"]
+workers_dev = true
+
+# Deploy to Cloudflare asks for PROBE_TOKEN from .dev.vars.example.
+# CLI fallback: npx --yes wrangler@4.84.0 secret put PROBE_TOKEN
+# Never put the secret in this file. With no valid secret /probe returns 503.

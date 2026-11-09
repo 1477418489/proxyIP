@@ -1,0 +1,22 @@
+{
+  "name": "cfproxyip-worker-probe",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "cloudflare": {
+    "bindings": {
+      "PROBE_TOKEN": {
+        "description": "填写至少32字符的随机探针密钥（建议64位十六进制）。可在本项目deploy.html生成，或运行 python -c \"import secrets; print(secrets.token_hex(32))\"。部署后将同一值填入本地CFPROXY_WORKER_TOKEN。不要使用示例值，也不要放进仓库或URL。"
+      }
+    }
+  },
+  "scripts": {
+    "test": "node --test",
+    "dev": "npx --yes wrangler@4.84.0 dev",
+    "bundle": "npx --yes wrangler@4.84.0 deploy --dry-run --outdir dist",
+    "deploy": "npx --yes wrangler@4.84.0 deploy"
+  }
+}

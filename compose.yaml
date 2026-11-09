@@ -1,0 +1,20 @@
+services:
+  cfproxy:
+    build: .
+    init: true
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      CFPROXY_HOST: 0.0.0.0
+      CFPROXY_PORT: "8000"
+      CFPROXY_DB: /data/cfproxy.sqlite3
+      CFPROXY_TOKEN: ${CFPROXY_TOKEN:?Set CFPROXY_TOKEN in .env before starting Docker}
+    ports:
+      - "127.0.0.1:${CFPROXY_HTTP_PORT:-8000}:8000"
+    volumes:
+      - cfproxy-data:/data
+    stop_grace_period: 30s
+
+volumes:
+  cfproxy-data:

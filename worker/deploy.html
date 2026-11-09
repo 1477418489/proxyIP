@@ -1,0 +1,282 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'none'; img-src 'none'; base-uri 'none'; form-action 'none'">
+  <title>cfPROXYIP · 部署 Worker 探针</title>
+  <style>
+    :root { color-scheme:light; font-family:system-ui,-apple-system,"Segoe UI",sans-serif; color:#18323d; background:#f4f7f8 }
+    * { box-sizing:border-box }
+    body { margin:0; line-height:1.7 }
+    main { max-width:920px; margin:auto; padding:40px 24px 64px }
+    h1 { margin:8px 0 12px; font-size:30px; line-height:1.35 }
+    h2 { margin:0 0 12px; font-size:20px }
+    p { margin:10px 0 }
+    .eyebrow { color:#187364; font-weight:700; font-size:13px; letter-spacing:.06em }
+    .intro,.hint { color:#536c77 }
+    .hint { font-size:13px }
+    section { margin-top:24px; padding:24px; background:#fff; border:1px solid #dce5e9; border-radius:14px }
+    label { display:block; font-size:14px; font-weight:600; margin:14px 0 6px }
+    input,textarea { width:100%; min-width:0; padding:11px 12px; border:1px solid #c9d8df; border-radius:7px; color:inherit; background:#fff; font:inherit; font-size:14px }
+    textarea,code { font-family:ui-monospace,Consolas,monospace; overflow-wrap:anywhere }
+    textarea { resize:vertical; line-height:1.55 }
+    textarea[readonly] { background:#f7fafb }
+    .actions { display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-top:12px }
+    button,.button { display:inline-block; border:1px solid #c9d8df; border-radius:7px; padding:9px 14px; background:#fff; color:#18323d; text-decoration:none; font:inherit; font-size:14px; cursor:pointer }
+    .primary { background:#147c6c; border-color:#147c6c; color:#fff; font-weight:600 }
+    button:disabled { cursor:not-allowed; opacity:.5 }
+    a { color:#116f63; text-underline-offset:3px }
+    a[aria-disabled=true] { cursor:not-allowed; background:#e6edef; color:#627983; border-color:#dce5e9 }
+    :focus-visible { outline:3px solid #67b7a7; outline-offset:3px }
+    li { margin:7px 0 }
+    ol { padding-left:24px }
+    .error { color:#a82d32; min-height:1.4em; font-size:13px; margin:6px 0 }
+    .notice { margin:20px 0; border-left:3px solid #147c6c; padding:0 14px }
+    #feedback { position:fixed; bottom:18px; left:50%; transform:translateX(-50%); padding:10px 18px; border-radius:8px; background:#18323d; color:#fff; max-width:calc(100% - 32px); overflow-wrap:anywhere; box-shadow:0 4px 24px #18323d22 }
+    footer { margin-top:24px; font-size:13px; color:#536c77 }
+    [hidden] { display:none!important }
+    @media(max-width:550px) { main { padding:24px 14px 60px } section { padding:18px } h1 { font-size:25px } .actions>* { flex-grow:1; text-align:center } }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <span class="eyebrow">cfPROXYIP / WORKER PROBE</span>
+    <h1>把探针部署到你的 Cloudflare</h1>
+    <p class="intro">先生成密钥，再选择仓库一键部署或控制台粘贴。最后把 Worker 地址和同一密钥填入本地项目。</p>
+    <p class="hint">本页可直接双击打开。密钥只保存在当前页面，刷新后清除；生成链接不会附带密钥。</p>
+  </header>
+
+  <section aria-labelledby="secret-title">
+    <h2 id="secret-title">1. 准备探针密钥</h2>
+    <label for="probe-token">PROBE_TOKEN</label>
+    <input id="probe-token" type="password" autocomplete="off" spellcheck="false" maxlength="128" placeholder="点击下方生成随机密钥，或填入已有密钥">
+    <div class="actions">
+      <button id="generate-token" class="primary" type="button">生成随机密钥</button>
+      <button id="show-token" type="button" aria-pressed="false">显示密钥</button>
+      <button id="copy-token" type="button" disabled>复制密钥</button>
+    </div>
+    <p class="hint">生成 64 位十六进制随机值。Cloudflare 的 PROBE_TOKEN 和本地 CFPROXY_WORKER_TOKEN 必须一致。密钥请自行保管，不要提交到仓库。</p>
+    <p id="token-error" class="error" role="status"></p>
+  </section>
+
+  <section aria-labelledby="repo-title">
+    <h2 id="repo-title">2A. 从公开仓库一键部署</h2>
+    <p>把 <code>worker</code> 目录的内容上传为独立的 GitHub/GitLab 公开仓库，再填入仓库地址。也可以上传整个项目，然后填入 <code>worker</code> 子目录的网页地址。</p>
+    <label for="repository">公开仓库或子目录 URL</label>
+    <input id="repository" type="url" spellcheck="false" autocomplete="off" placeholder="https://github.com/你的用户名/你的探针仓库">
+    <p class="hint">完整项目示例：<code>https://github.com/用户名/仓库/tree/main/worker</code>。这里生成链接，不验证仓库是否存在或是否公开。</p>
+    <p id="repository-error" class="error" role="status">尚未填写仓库地址；暂未上传可用下方控制台方法。</p>
+    <label for="deployment-url">生成的部署链接</label>
+    <input id="deployment-url" type="text" readonly placeholder="填写真实公开仓库地址后生成">
+    <div class="actions">
+      <a id="deploy-link" class="button primary" role="link" aria-disabled="true" tabindex="0" target="_blank" rel="noopener noreferrer">Deploy to Cloudflare ↗</a>
+      <button id="copy-link" type="button" disabled>复制部署链接</button>
+    </div>
+    <p class="hint">点击后登录 Cloudflare，按页面连接 GitHub/GitLab、选择 Worker 名称，并将第 1 步的密钥填入 PROBE_TOKEN。Cloudflare 会在你的 Git 账号创建仓库副本并部署 Worker。</p>
+    <details>
+      <summary>将部署按钮加入仓库 README</summary>
+      <label for="badge-markdown">Markdown</label>
+      <textarea id="badge-markdown" rows="3" readonly placeholder="填写仓库地址后生成真实部署按钮"></textarea>
+      <div class="actions"><button id="copy-markdown" type="button" disabled>复制 Markdown</button></div>
+    </details>
+  </section>
+
+  <section aria-labelledby="dashboard-title">
+    <h2 id="dashboard-title">2B. 尚无仓库：控制台粘贴部署</h2>
+    <ol>
+      <li>打开 <a href="https://dash.cloudflare.com/?to=/:account/workers-and-pages" target="_blank" rel="noopener noreferrer">Cloudflare Workers &amp; Pages</a>，选择 <strong>Create application → Start with Hello World</strong>，取名并部署。</li>
+      <li>进入 Worker 的 <strong>Settings → Runtime</strong>，兼容日期设为 <code>2026-11-01</code>，保留/添加 <code>nodejs_compat</code> 兼容标志。此日期已默认启用 Node 兼容，显式标志与项目配置一致。</li>
+      <li>打开 <a href="dist/index.js" target="_blank" rel="noopener noreferrer">dist/index.js 单文件</a>，复制全部内容，在 Worker 的 <strong>Edit code</strong> 中替换默认代码，点击 <strong>Deploy</strong>。</li>
+      <li><strong>Settings → Variables and Secrets → Add</strong>，类型选 <strong>Secret</strong>，名称 <code>PROBE_TOKEN</code>，值填第 1 步的密钥，再部署。</li>
+      <li>复制 <strong>Settings → Domains &amp; Routes</strong> 中的 <code>https://…workers.dev</code> 地址。根路径返回 404 属于正常行为，探针由本地项目调用。</li>
+    </ol>
+    <p class="hint">如果控制台入口名称改变或没有在线编辑选项，按 <a href="README.md">部署文档</a> 使用 Wrangler。粘贴的是 dist/index.js，不是需要本地模块的 src/index.js。</p>
+  </section>
+
+  <section aria-labelledby="client-title">
+    <h2 id="client-title">3. 连接本地项目</h2>
+    <label for="worker-url">部署得到的 Worker 根地址</label>
+    <input id="worker-url" type="url" spellcheck="false" autocomplete="off" placeholder="https://cfproxyip-probe.你的子域.workers.dev">
+    <p id="worker-error" class="error" role="status"></p>
+    <label for="backend-env">写入项目根目录 .env 的两项配置</label>
+    <textarea id="backend-env" rows="3" readonly placeholder="填写有效密钥和 Worker 地址后生成"></textarea>
+    <div class="actions">
+      <button id="copy-env" type="button" disabled>复制后端配置</button>
+      <button id="show-env" type="button" aria-pressed="false" disabled>显示配置密钥</button>
+    </div>
+    <p class="hint">默认隐藏配置中的密钥；“复制后端配置”会复制真实密钥。只修改这两项，保留 .env 里其他配置。地址不带 /probe、查询参数或密钥。</p>
+    <ol>
+      <li>保存 .env，停止原 Python 服务，再运行 <code>python -m cfproxy</code>。Docker 使用 <code>docker compose up -d --force-recreate</code> 重新读取环境。</li>
+      <li>刷新管理页面，选择 <strong>Workers 路径</strong>，先勾选 1–3 个候选，每目标采样 1 次，并发 1，开始检测。</li>
+      <li>在详情里查看 Worker 机房、TLS/HTTP 成败和观测出口地区。要找日本出口，选择“观测出口 → 日本 JP”；候选归属本身不保证出口位于日本。</li>
+    </ol>
+    <p class="notice">Workers 模式变为可选，只表示本地配置完整。实际检测通过才说明此次 Worker 路径可用。Cloudflare 自有 IP 段受出站 TCP 限制。</p>
+  </section>
+  <footer>
+    <a href="README.md">完整部署与排错文档</a> ·
+    <a href="https://developers.cloudflare.com/workers/platform/deploy-buttons/" target="_blank" rel="noopener noreferrer">Cloudflare 官方部署按钮说明</a>
+  </footer>
+</main>
+<div id="feedback" role="status" hidden></div>
+<script>
+  "use strict";
+  const $ = (id) => document.getElementById(id);
+  let feedbackTimer;
+  let envVisible = false;
+
+  function notify(message) {
+    $("feedback").textContent = message;
+    $("feedback").hidden = false;
+    clearTimeout(feedbackTimer);
+    feedbackTimer = setTimeout(() => { $("feedback").hidden = true; }, 4500);
+  }
+
+  function tokenValid() {
+    const value = $("probe-token").value;
+    // Printable non-space ASCII makes copying into HTTP Bearer and dotenv
+    // unambiguous. Hex values generated here are recommended.
+    return /^[\x21-\x7e]{32,128}$/.test(value) && !/["'`\\$#]/.test(value);
+  }
+
+  function repositoryURL(raw) {
+    if (!raw || /[\s\\]/.test(raw)) throw new Error("请填写公开 GitHub/GitLab 仓库的 HTTPS 地址。");
+    const url = new URL(raw);
+    if (url.protocol !== "https:" || !["github.com", "gitlab.com"].includes(url.hostname) || url.port || url.username || url.password || url.search || url.hash) {
+      throw new Error("只支持无凭据、查询参数和片段的 https://github.com 或 https://gitlab.com 地址。");
+    }
+    const parts = url.pathname.split("/").filter(Boolean);
+    if (parts.length < 2 || parts.some(part => !/^[A-Za-z0-9_.-]+$/.test(part))) throw new Error("请填写仓库主页或 worker 子目录的网页地址。");
+    if (url.hostname === "github.com" && parts.length > 2 && (parts[2] !== "tree" || parts.length < 5)) {
+      throw new Error("GitHub 子目录地址应包含 /tree/分支/worker；不要填写单个文件地址。");
+    }
+    if (url.hostname === "gitlab.com" && parts.includes("-") && (parts[parts.indexOf("-") + 1] !== "tree" || parts.length < parts.indexOf("-") + 4)) {
+      throw new Error("GitLab 子目录地址应包含 /-/tree/分支/worker；不要填写单个文件地址。");
+    }
+    return url.href.replace(/\/$/, "");
+  }
+
+  function updateRepository() {
+    const raw = $("repository").value.trim();
+    const link = $("deploy-link");
+    link.removeAttribute("href");
+    link.setAttribute("aria-disabled", "true");
+    $("copy-link").disabled = true;
+    $("copy-markdown").disabled = true;
+    $("deployment-url").value = "";
+    $("badge-markdown").value = "";
+    try {
+      if (!raw) {
+        $("repository-error").textContent = "尚未填写仓库地址；暂未上传可用下方控制台方法。";
+        return;
+      }
+      const source = repositoryURL(raw);
+      const target = new URL("https://deploy.workers.cloudflare.com/");
+      target.searchParams.set("url", source);
+      link.href = target.href;
+      $("deployment-url").value = target.href;
+      link.setAttribute("aria-disabled", "false");
+      $("badge-markdown").value = `[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](${target.href})`;
+      $("copy-link").disabled = false;
+      $("copy-markdown").disabled = false;
+      $("repository-error").textContent = "";
+    } catch (error) {
+      $("repository-error").textContent = error instanceof TypeError ? "仓库 URL 格式无效。" : error.message;
+    }
+  }
+
+  function workerURL() {
+    const raw = $("worker-url").value.trim();
+    if (!raw || /[\s\\]/.test(raw)) throw new Error("请填写部署得到的 HTTPS 根地址。");
+    const url = new URL(raw);
+    const host = url.hostname;
+    const dnsName = /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z](?:[a-z0-9-]{0,61}[a-z0-9])?$/i.test(host);
+    if (!dnsName || host.endsWith(".local") || host.endsWith(".localhost") || url.port === "0") {
+      throw new Error("请使用 workers.dev 或已绑定的公网域名，不接受 IP、本地域名或 0 端口。");
+    }
+    if (url.protocol !== "https:" || url.username || url.password || url.search || url.hash || !["", "/"].includes(url.pathname)) {
+      throw new Error("地址必须是 HTTPS 根地址，不带 /probe、凭据、查询参数或片段。");
+    }
+    return url.origin;
+  }
+
+  function envText(mask = false) {
+    if (!tokenValid()) throw new Error("请先生成或填写有效密钥。");
+    return `CFPROXY_WORKER_URL=${workerURL()}\nCFPROXY_WORKER_TOKEN=${mask ? "••••••••（复制按钮会复制真实密钥）" : $("probe-token").value}\n`;
+  }
+
+  function updateConfig() {
+    $("copy-token").disabled = !tokenValid();
+    $("token-error").textContent = $("probe-token").value && !tokenValid() ? "请输入32–128位不含空格、引号及 $ # ` \\ 的ASCII密钥；建议直接生成。" : "";
+    $("backend-env").value = "";
+    $("copy-env").disabled = true;
+    $("show-env").disabled = true;
+    $("worker-error").textContent = "";
+    try {
+      if ($("worker-url").value) workerURL();
+    } catch (error) {
+      $("worker-error").textContent = error instanceof TypeError ? "Worker URL 格式无效。" : error.message;
+      return;
+    }
+    if (!tokenValid() || !$("worker-url").value) return;
+    $("backend-env").value = envText(!envVisible);
+    $("copy-env").disabled = false;
+    $("show-env").disabled = false;
+  }
+
+  async function copy(value, fallback, reveal = false) {
+    try {
+      await navigator.clipboard.writeText(value);
+      notify("已复制。");
+    } catch {
+      if (reveal) {
+        if (fallback === $("probe-token")) {
+          fallback.type = "text";
+          $("show-token").textContent = "隐藏密钥";
+          $("show-token").setAttribute("aria-pressed", "true");
+        } else {
+          envVisible = true;
+          $("show-env").textContent = "隐藏配置密钥";
+          $("show-env").setAttribute("aria-pressed", "true");
+        }
+        fallback.value = value;
+      }
+      fallback.focus();
+      fallback.select();
+      notify("浏览器未允许自动复制，内容已选中，请手动复制。");
+    }
+  }
+
+  $("generate-token").addEventListener("click", () => {
+    const bytes = crypto.getRandomValues(new Uint8Array(32));
+    $("probe-token").value = Array.from(bytes, b => b.toString(16).padStart(2, "0")).join("");
+    updateConfig();
+    notify("新密钥已生成，请保存并同步到 Cloudflare 和本地配置。");
+  });
+  $("show-token").addEventListener("click", () => {
+    const showing = $("probe-token").type === "password";
+    $("probe-token").type = showing ? "text" : "password";
+    $("show-token").textContent = showing ? "隐藏密钥" : "显示密钥";
+    $("show-token").setAttribute("aria-pressed", String(showing));
+  });
+  $("show-env").addEventListener("click", () => {
+    envVisible = !envVisible;
+    $("show-env").textContent = envVisible ? "隐藏配置密钥" : "显示配置密钥";
+    $("show-env").setAttribute("aria-pressed", String(envVisible));
+    updateConfig();
+  });
+  $("copy-token").addEventListener("click", () => copy($("probe-token").value, $("probe-token"), true));
+  $("copy-env").addEventListener("click", () => copy(envText(), $("backend-env"), true));
+  $("copy-link").addEventListener("click", () => copy($("deploy-link").href, $("deployment-url")));
+  $("copy-markdown").addEventListener("click", () => copy($("badge-markdown").value, $("badge-markdown")));
+  $("deploy-link").addEventListener("click", event => { if (!$("deploy-link").hasAttribute("href")) event.preventDefault(); });
+  $("repository").addEventListener("input", updateRepository);
+  $("worker-url").addEventListener("input", updateConfig);
+  $("probe-token").addEventListener("input", updateConfig);
+  updateRepository();
+  updateConfig();
+</script>
+</body>
+</html>

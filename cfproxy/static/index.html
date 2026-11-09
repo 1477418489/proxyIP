@@ -1,0 +1,718 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light" />
+    <title>cfPROXYIP · 候选与质量检测</title>
+    <link rel="icon" href="/static/favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="/static/style.css" />
+    <script src="/static/app.js" defer></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#main">跳到主要内容</a>
+    <aside class="sidebar" aria-label="主导航">
+      <a class="brand" href="#main"
+        ><span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span
+        ><span
+          >cf<span class="brand-light">PROXYIP</span
+          ><small>NETWORK WORKBENCH</small></span
+        ></a
+      >
+      <span class="nav-caption">工作空间</span>
+      <nav>
+        <a class="nav-link active" href="#candidates-section"
+          ><span aria-hidden="true">▦</span>候选池</a
+        >
+        <a class="nav-link" href="#acquire-section"
+          ><span aria-hidden="true">↙</span>来源与导入</a
+        >
+        <a class="nav-link" href="#jobs-section"
+          ><span aria-hidden="true">◷</span>检测记录</a
+        >
+      </nav>
+      <div class="sidebar-note">
+        <span class="tiny-label">检测范围</span>
+        <p>Cloudflare Workers<br />PROXYIP 候选验证</p>
+        <span>按实际路径测量，保留每次结果。</span>
+      </div>
+      <div class="sidebar-footer">
+        <span class="connection-dot" id="sidebar-dot"></span
+        ><span id="sidebar-status">正在连接服务</span
+        ><span class="version">MVP</span>
+      </div>
+    </aside>
+
+    <main id="main">
+      <header class="page-header">
+        <div>
+          <div class="eyebrow">连接 · 验证 · 筛选</div>
+          <h1>PROXYIP 检测台</h1>
+          <p class="page-description">
+            收集候选地址，查看真实连接质量，导出最近验证通过的结果。
+          </p>
+        </div>
+        <div class="header-actions">
+          <span class="service-label" id="service-label">连接中</span
+          ><button class="button secondary small" id="auth-open" type="button">
+            管理密钥
+          </button>
+        </div>
+      </header>
+
+      <div class="error-banner" id="connection-error" role="alert" hidden>
+        <span id="connection-error-text"></span
+        ><button
+          class="button secondary small"
+          id="retry-connect"
+          type="button"
+        >
+          重新连接
+        </button>
+      </div>
+
+      <section class="overview" aria-label="候选概览">
+        <article class="metric-card">
+          <span class="metric-label">候选地址</span>
+          <div class="metric-value" id="stat-candidates">—</div>
+          <span class="metric-note" id="stat-source-note">等待加载候选池</span>
+        </article>
+        <article class="metric-card">
+          <span class="metric-label" id="stat-passed-label">本地检测通过</span>
+          <div class="metric-value accent" id="stat-passed">—</div>
+          <span class="metric-note">所选模式的最新完整结果</span>
+        </article>
+        <article class="metric-card">
+          <span class="metric-label">需要复查</span>
+          <div class="metric-value" id="stat-recheck">—</div>
+          <span class="metric-note">不稳定或检测失败</span>
+        </article>
+        <article class="metric-card">
+          <span class="metric-label">任务状态</span>
+          <div class="metric-value task-metric" id="stat-task">—</div>
+          <span class="metric-note" id="stat-task-note">等待加载任务</span>
+        </article>
+      </section>
+
+      <section class="mode-bar" aria-label="检测模式">
+        <div class="mode-switch" role="group" aria-label="选择检测模式">
+          <button
+            id="mode-local"
+            class="mode-button selected"
+            type="button"
+            aria-pressed="true"
+          >
+            本地检测</button
+          ><button
+            id="mode-worker"
+            class="mode-button"
+            type="button"
+            aria-pressed="false"
+            disabled
+          >
+            Workers 路径<span id="worker-mode-label">未配置</span>
+          </button>
+        </div>
+        <p id="mode-description">
+          本地通过仅代表当前机器到候选的 TLS / HTTP 路径，Workers 尚未验证。
+        </p>
+      </section>
+
+      <div class="workspace-grid" id="acquire-section">
+        <section class="panel import-panel" aria-labelledby="import-heading">
+          <div class="panel-heading">
+            <div>
+              <span class="section-number">01</span>
+              <h2 id="import-heading">收集候选</h2>
+            </div>
+            <span class="muted-label" id="import-limit"
+              >手动导入 / 文件 / 远程来源</span
+            >
+          </div>
+          <form id="import-form">
+            <label class="field-label" for="import-text">候选地址</label>
+            <textarea
+              id="import-text"
+              rows="5"
+              spellcheck="false"
+              placeholder="每行一个 IP、域名或 IP:端口&#10;IPv6 带端口时使用 [IPv6]:443&#10;也可以直接粘贴 CSV 内容"
+              required
+            ></textarea>
+            <div class="import-bottom">
+              <div class="inline-fields">
+                <label class="file-button" for="import-file"
+                  >↥ 读取文件<input
+                    id="import-file"
+                    type="file"
+                    accept=".txt,.csv,text/plain,text/csv" /></label
+                ><label class="sr-only" for="import-format">导入格式</label
+                ><select id="import-format">
+                  <option value="auto">自动识别格式</option>
+                  <option value="txt">TXT 文本</option>
+                  <option value="csv">CSV 表格</option>
+                </select>
+              </div>
+              <button class="button primary" id="import-submit" type="submit">
+                导入候选 <span aria-hidden="true">↗</span>
+              </button>
+            </div>
+            <p class="field-hint" id="file-note">
+              默认端口 443。域名解析后保存为固定
+              IP，来源中的测速数据不计入本次质量。
+            </p>
+          </form>
+          <div
+            class="import-result"
+            id="import-result"
+            aria-live="polite"
+            hidden
+          ></div>
+          <details class="sources-details" open>
+            <summary>
+              <span>远程数据源</span
+              ><span class="muted-label" id="source-count">—</span>
+            </summary>
+            <p class="field-hint">
+              仅在点击“拉取”时访问来源；导入的地址仍需自行检测。
+            </p>
+            <div class="fetch-proxy-panel">
+              <div class="fetch-proxy-heading">
+                <label class="checkbox-label" for="fetch-use-proxy"
+                  ><input id="fetch-use-proxy" type="checkbox" />使用 HTTP
+                  代理拉取</label
+                >
+                <span class="muted-label" id="fetch-proxy-status"
+                  >默认直连</span
+                >
+              </div>
+              <div id="fetch-proxy-fields" hidden>
+                <label class="field-label" for="fetch-proxy-url"
+                  >代理地址</label
+                >
+                <div class="proxy-input-row">
+                  <input
+                    id="fetch-proxy-url"
+                    type="password"
+                    autocomplete="off"
+                    spellcheck="false"
+                    maxlength="2048"
+                    placeholder="http://127.0.0.1:7890"
+                    disabled
+                  />
+                  <button
+                    class="button secondary small"
+                    id="fetch-proxy-show"
+                    type="button"
+                    aria-pressed="false"
+                    disabled
+                  >
+                    显示
+                  </button>
+                </div>
+                <p class="field-hint" id="fetch-proxy-default">
+                  未配置后端默认代理，请填写地址。
+                </p>
+                <p class="field-hint">
+                  支持 http://user:pass@host:port。127.0.0.1
+                  指运行后端的机器；地址仅保存在当前页面，用于拉取来源和下载地区库。
+                </p>
+              </div>
+            </div>
+            <div class="source-list" id="source-list">
+              <p class="empty-inline">正在读取来源…</p>
+            </div>
+            <details class="add-source-details">
+              <summary>＋ 添加 HTTPS 来源</summary>
+              <form id="source-form">
+                <label class="field-label" for="source-name">来源名称</label
+                ><input
+                  id="source-name"
+                  type="text"
+                  maxlength="80"
+                  placeholder="例如：我的候选列表"
+                  required
+                /><label class="field-label" for="source-url">HTTPS 地址</label
+                ><input
+                  id="source-url"
+                  type="url"
+                  maxlength="2048"
+                  placeholder="https://example.com/proxyip.txt"
+                  required
+                /><button
+                  class="button secondary small"
+                  id="source-submit"
+                  type="submit"
+                >
+                  保存来源
+                </button>
+              </form>
+            </details>
+          </details>
+        </section>
+
+        <section class="panel task-panel" aria-labelledby="task-heading">
+          <div class="panel-heading">
+            <div>
+              <span class="section-number">02</span>
+              <h2 id="task-heading">验证连接质量</h2>
+            </div>
+            <span class="badge neutral" id="task-mode-badge">本地模式</span>
+          </div>
+          <div class="probe-path" aria-hidden="true">
+            <span id="path-start">当前机器</span><span class="path-line"></span
+            ><span>候选地址</span><span class="path-line"></span
+            ><span>TLS / HTTP</span>
+          </div>
+          <form id="job-form">
+            <div class="job-fields">
+              <div>
+                <label class="field-label" for="job-concurrency"
+                  >并发候选数</label
+                ><input
+                  id="job-concurrency"
+                  type="number"
+                  min="1"
+                  max="16"
+                  value="8"
+                  required
+                /><span class="field-hint">1–16</span>
+              </div>
+              <div>
+                <label class="field-label" for="job-samples">每目标采样</label
+                ><input
+                  id="job-samples"
+                  type="number"
+                  min="1"
+                  max="5"
+                  value="3"
+                  required
+                /><span class="field-hint">1–5 次</span>
+              </div>
+              <div>
+                <label class="field-label" for="job-timeout">单次超时</label>
+                <div class="input-unit">
+                  <input
+                    id="job-timeout"
+                    type="number"
+                    min="3"
+                    max="20"
+                    value="10"
+                    required
+                  /><span>秒</span>
+                </div>
+                <span class="field-hint">整体时间上限</span>
+              </div>
+            </div>
+            <div class="targets-block">
+              <span class="field-label">验证目标</span>
+              <div class="target-list" id="target-list">
+                <span class="muted-label">正在加载…</span>
+              </div>
+            </div>
+            <div class="scope-line">
+              <span id="job-scope">请先在候选池中选择要检测的地址</span>
+            </div>
+            <button
+              class="button primary run-button"
+              id="job-submit"
+              type="submit"
+              disabled
+            >
+              <span aria-hidden="true">▷</span
+              ><span id="job-submit-label">开始本地检测</span>
+            </button>
+            <p class="field-hint">
+              只检测已选地址，每次最多 500
+              个。可在候选池按当前筛选和排序跨页选择。
+            </p>
+          </form>
+          <div class="active-job" id="active-job" aria-live="polite" hidden>
+            <div class="active-job-heading">
+              <span
+                ><i class="running-dot" aria-hidden="true"></i
+                ><strong id="active-job-title">正在检测</strong></span
+              ><button
+                class="text-button danger-text"
+                id="job-cancel"
+                type="button"
+              >
+                取消任务
+              </button>
+            </div>
+            <progress
+              id="job-progress"
+              max="100"
+              value="0"
+              aria-label="任务进度"
+            ></progress>
+            <div class="progress-caption">
+              <span id="job-progress-text"></span
+              ><span id="job-progress-passed"></span>
+            </div>
+          </div>
+          <div class="quality-note">
+            <span class="note-icon" aria-hidden="true">i</span>
+            <p>
+              <strong>先看成功率，再看延迟。</strong
+              >分数由成功率和总耗时组成，只适合同一模式、目标及检测位置下比较。少量采样不能保证长期可用。
+            </p>
+          </div>
+          <p class="worker-note" id="worker-note">
+            启用 Workers 路径检测：按 README 配置并部署自己的 Worker 探针。
+          </p>
+        </section>
+      </div>
+
+      <section
+        class="panel candidates-panel"
+        id="candidates-section"
+        aria-labelledby="candidates-heading"
+      >
+        <div class="panel-heading">
+          <div>
+            <span class="section-number">03</span>
+            <h2 id="candidates-heading">候选池</h2>
+            <span class="count-badge" id="candidate-count">0</span>
+          </div>
+          <button
+            class="button secondary small"
+            id="refresh-button"
+            type="button"
+          >
+            ↻ 刷新
+          </button>
+        </div>
+        <div class="geo-panel" id="geo-panel" aria-label="地区数据库">
+          <div class="geo-panel-main">
+            <div class="geo-panel-copy">
+              <span class="field-label">地区数据库</span>
+              <strong id="geo-status">正在读取地区数据状态…</strong>
+              <p id="geo-description">
+                未加载地区库时，候选归属显示为未知/未分类。
+              </p>
+            </div>
+            <button
+              class="button secondary small"
+              id="geo-update"
+              type="button"
+              disabled
+            >
+              下载地区库
+            </button>
+          </div>
+          <p class="geo-action-hint" id="geo-action-hint">
+            下载使用“来源与导入”中的代理设置，不会自动下载。
+          </p>
+          <p class="geo-error" id="geo-error" role="alert" hidden></p>
+          <p class="geo-attribution">
+            IP Geolocation by
+            <a
+              href="https://db-ip.com/"
+              target="_blank"
+              rel="noopener noreferrer"
+              >DB-IP</a
+            >
+            ·
+            <a
+              href="https://creativecommons.org/licenses/by/4.0/"
+              target="_blank"
+              rel="noopener noreferrer"
+              >CC BY 4.0</a
+            >
+          </p>
+        </div>
+        <div class="region-toolbar">
+          <label class="field-label" for="country-basis">地区筛选</label>
+          <select id="country-basis" aria-label="地区筛选依据">
+            <option value="candidate">候选归属</option>
+            <option value="exit">观测出口</option>
+          </select>
+          <label class="sr-only" for="country-filter">选择国家或地区</label>
+          <select id="country-filter">
+            <option value="all">全部国家/地区</option>
+            <option value="unknown">未知/未分类</option>
+          </select>
+          <p id="country-filter-note">
+            候选归属来自 IP 地理数据库，不代表物理位置或实际出口。
+          </p>
+        </div>
+        <div class="table-toolbar">
+          <div class="filter-controls">
+            <label class="search-field"
+              ><span aria-hidden="true">⌕</span
+              ><input
+                id="search-input"
+                type="search"
+                placeholder="搜索地址、来源或地区"
+                aria-label="搜索地址、来源或地区" /></label
+            ><label class="sr-only" for="status-filter">筛选检测状态</label
+            ><select id="status-filter">
+              <option value="all">全部状态</option>
+              <option value="passed">检测通过</option>
+              <option value="unstable">不稳定</option>
+              <option value="failed">失败</option>
+              <option value="untested">未检测</option>
+              <option value="cancelled">已取消</option>
+              <option value="interrupted">已中断</option></select
+            ><label class="sr-only" for="sort-filter">排序方式</label
+            ><select id="sort-filter">
+              <option value="score">质量优先</option>
+              <option value="latency">延迟优先</option>
+              <option value="recent">最近检测</option>
+              <option value="address">按地址</option>
+            </select>
+          </div>
+          <div class="export-controls">
+            <label for="export-age">有效期</label
+            ><select id="export-age" aria-label="导出结果有效期">
+              <option value="1">1 小时</option>
+              <option value="6">6 小时</option>
+              <option value="24" selected>24 小时</option>
+              <option value="72">72 小时</option></select
+            ><button
+              class="button secondary small"
+              id="export-txt"
+              type="button"
+            >
+              ↓ TXT</button
+            ><button
+              class="button secondary small"
+              id="export-csv"
+              type="button"
+            >
+              ↓ CSV
+            </button>
+          </div>
+        </div>
+        <div class="batch-toolbar">
+          <form id="select-first-form" class="batch-select-form">
+            <label for="selection-count">批量选择</label>
+            <input
+              id="selection-count"
+              type="number"
+              min="1"
+              max="500"
+              step="1"
+              value="100"
+              required
+              aria-label="批量选择数量，1 到 500"
+            />
+            <button
+              class="button secondary small"
+              id="select-first"
+              type="submit"
+              disabled
+            >
+              选择前 N 个
+            </button>
+            <div
+              class="batch-presets"
+              role="group"
+              aria-label="快捷跨页选择数量"
+            >
+              <button
+                class="text-button"
+                type="button"
+                data-select-count="100"
+                disabled
+              >
+                100
+              </button>
+              <button
+                class="text-button"
+                type="button"
+                data-select-count="200"
+                disabled
+              >
+                200
+              </button>
+              <button
+                class="text-button"
+                type="button"
+                data-select-count="500"
+                disabled
+              >
+                500
+              </button>
+            </div>
+          </form>
+          <div class="batch-selection-state">
+            <span id="selection-summary">尚未选择</span
+            ><button
+              class="text-button"
+              id="clear-selection"
+              type="button"
+              disabled
+            >
+              清空选择
+            </button>
+          </div>
+          <p class="field-hint">
+            按当前筛选和排序跨页选择，并替换已有选择；表头复选框仅选择当前页。
+          </p>
+        </div>
+        <div class="table-scroll">
+          <table class="candidate-table">
+            <thead>
+              <tr>
+                <th class="select-cell">
+                  <input
+                    id="select-all"
+                    type="checkbox"
+                    aria-label="选择当前页全部候选"
+                  />
+                </th>
+                <th>候选地址 / 来源</th>
+                <th>
+                  <span
+                    title="归属为候选 IP 的离线地理识别；出口为所选模式最新成功样本的来源国家观测，均不表示物理位置或 Cloudflare 机房。"
+                    >地区：归属 / 出口</span
+                  >
+                </th>
+                <th>验证状态</th>
+                <th>成功率 / 样本</th>
+                <th>延迟 <span class="unit-label">ms</span></th>
+                <th>
+                  <span
+                    title="成功率和总耗时的综合分数，仅在同模式、同目标、同检测位置比较"
+                    >评分</span
+                  >
+                </th>
+                <th>最近检测</th>
+                <th class="actions-cell">操作</th>
+              </tr>
+            </thead>
+            <tbody id="candidates-body"></tbody>
+          </table>
+        </div>
+        <div class="empty-state" id="candidate-empty">
+          <span class="empty-symbol" aria-hidden="true">◇</span>
+          <h3 id="empty-title">候选池还是空的</h3>
+          <p id="empty-description">
+            粘贴一组地址，或从远程来源拉取候选，然后开始检测。
+          </p>
+          <a
+            class="button secondary small"
+            id="empty-action"
+            href="#acquire-section"
+            >导入第一组候选 ↑</a
+          >
+        </div>
+        <div class="table-footer">
+          <span id="table-count">暂无候选</span>
+          <div class="pagination">
+            <button
+              class="button secondary small"
+              id="page-previous"
+              type="button"
+              aria-label="上一页"
+              disabled
+            >
+              ←</button
+            ><span id="page-label">1 / 1</span
+            ><button
+              class="button secondary small"
+              id="page-next"
+              type="button"
+              aria-label="下一页"
+              disabled
+            >
+              →
+            </button>
+          </div>
+        </div>
+        <p class="export-note" id="export-scope-note">
+          导出按当前模式和地区筛选，只包含最新完整通过且在有效期内的结果；不受搜索关键词、状态筛选或勾选影响。
+        </p>
+      </section>
+
+      <section
+        class="panel jobs-panel"
+        id="jobs-section"
+        aria-labelledby="jobs-heading"
+      >
+        <div class="panel-heading">
+          <div>
+            <span class="section-number">04</span>
+            <h2 id="jobs-heading">检测记录</h2>
+          </div>
+          <span class="muted-label">每次任务均保留结果</span>
+        </div>
+        <div id="jobs-list" class="jobs-list">
+          <p class="empty-inline">
+            尚无检测任务。第一次检测完成后，记录会显示在这里。
+          </p>
+        </div>
+      </section>
+      <footer class="page-footer">
+        <span>cfPROXYIP · 让每一次“可用”都有依据</span
+        ><span>检测结果仅代表所测目标、路径与时间</span>
+      </footer>
+    </main>
+
+    <dialog id="auth-dialog" class="auth-dialog" aria-labelledby="auth-title">
+      <form id="auth-form">
+        <div class="dialog-heading">
+          <div>
+            <span class="eyebrow">访问管理</span>
+            <h2 id="auth-title">管理密钥</h2>
+          </div>
+          <button
+            class="icon-button"
+            id="auth-close"
+            type="button"
+            aria-label="关闭"
+          >
+            ×
+          </button>
+        </div>
+        <p id="auth-description">
+          如果服务启用了管理 token，请在此输入。密钥只保存在当前页面内存中。
+        </p>
+        <label class="field-label" for="auth-token">管理 token</label
+        ><input
+          id="auth-token"
+          type="password"
+          autocomplete="off"
+          spellcheck="false"
+          required
+        />
+        <p class="form-error" id="auth-error" role="alert" hidden></p>
+        <div class="dialog-actions">
+          <button class="button secondary" id="auth-clear" type="button">
+            清除密钥</button
+          ><button class="button primary" id="auth-submit" type="submit">
+            连接服务
+          </button>
+        </div>
+      </form>
+    </dialog>
+    <dialog
+      id="history-dialog"
+      class="history-dialog"
+      aria-labelledby="history-title"
+    >
+      <div class="dialog-heading">
+        <div>
+          <span class="eyebrow">检测明细</span>
+          <h2 id="history-title">候选历史</h2>
+        </div>
+        <button
+          class="icon-button"
+          id="history-close"
+          type="button"
+          aria-label="关闭历史详情"
+        >
+          ×
+        </button>
+      </div>
+      <div id="history-content"></div>
+    </dialog>
+    <div
+      class="toast-stack"
+      id="toast-stack"
+      aria-live="polite"
+      aria-atomic="false"
+    ></div>
+  </body>
+</html>

@@ -1,0 +1,4 @@
+# Declare the required Worker Secret for the Deploy to Cloudflare setup page.
+# Fill in your own random value with at least 32 characters during deployment.
+# Keep this template empty. Never commit a real token.
+PROBE_TOKEN=
